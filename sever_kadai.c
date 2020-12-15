@@ -32,7 +32,7 @@ struct profile
 };
 
 /* グローバル変数 ********************************************************** */
-struct profile profile_data[10000];
+struct profile profile_data[1000000];
 int nprofiles = 0;
 
 /* ************************************************************************* *
@@ -96,17 +96,38 @@ add_profile(struct profile *p,
 
     return p;
 }
+/*クライアント側にメッセージを送信する*/
+void send_message(int new_s, char message[BUF_SIZE])
+{
+    int send_byte = send(new_s, message, strlen(message), 0);
+    if (send_byte < 0)
+    {
+        printf("sendに失敗\n");
+    }
+    else
+    {
+        printf("sendに成功\n");
+    }
+}
 
 /* 終了コマンド(%Q) ******************************************************** */
-void command_quit(void)
+void command_quit(int new_s)
 {
-    exit(0);
+    char message[BUF_SIZE];
+    memset(message, 0, BUF_SIZE);
+    sprintf(message, "%s", "Q");
+    send_message(new_s, message);
+    // exit(0);
 }
 
 /* チェックコマンド(%C) **************************************************** */
-void command_check(void)
+void command_check(int new_s)
 {
-    printf("%d profile(s)\n", nprofiles);
+    char message[BUF_SIZE];
+    memset(message, 0, BUF_SIZE);
+    sprintf(message, "%s,%d", "C", nprofiles);
+    printf("message:%s\n", message);
+    send_message(new_s, message);
 }
 
 /* ************************************************************************* *
@@ -133,24 +154,51 @@ void print_profile_csv(FILE *fp, struct profile *p)
 }
 
 /* プリントコマンド(%P) **************************************************** */
-void command_print(struct profile *p,
+void command_print(int new_s, struct profile *p,
                    int num)
 {
     int start = 0, end = nprofiles;
     int n;
 
     if (num > 0 && num < nprofiles)
-    {
+    { //登録している情報より少ないとき
         end = num;
     }
     else if (num < 0 && num + end > 0)
     {
         start = num + end;
     }
+
+    int flag = 0;
     for (n = start; n < end; n++)
     {
-        print_profile(&p[n]);
-        printf("\n");
+        char message[BUF_SIZE];
+        memset(message, 0, BUF_SIZE);
+        int second = 1;
+        if (flag == 0)
+        {
+
+            sprintf(message, "%s,%d", "P", end);
+            send_message(new_s, message);
+            flag = 1;
+            n--;
+            sleep(second);
+        }
+        else
+        {
+            sprintf(message, "%d,%s,%04d-%02d-%02d,%s,%s",
+                    p[n].id,
+                    p[n].name,
+                    p[n].birthday.y,
+                    p[n].birthday.m,
+                    p[n].birthday.d,
+                    p[n].home,
+                    p[n].comment);
+            send_message(new_s, message);
+            sleep(second);
+        }
+        // print_profile(&p[n]);
+        // printf("\n");
     }
 }
 
@@ -340,19 +388,19 @@ void command_sort(struct profile *p,
 /* ************************************************************************* *
  * コマンド分岐関数
  * ************************************************************************* */
-void exec_command(char command,
+void exec_command(int new_s, char command,
                   char *parameter)
 {
     switch (command)
     {
     case 'Q':
-        command_quit();
+        command_quit(new_s);
         break;
     case 'C':
-        command_check();
+        command_check(new_s);
         break;
     case 'P':
-        command_print(profile_data, atoi(parameter));
+        command_print(new_s, profile_data, atoi(parameter));
         break;
     case 'R':
         command_read(profile_data, parameter);
@@ -373,28 +421,51 @@ void exec_command(char command,
 }
 
 /* ************************************************************************* *
- * 入力文字列の解析
+ * 入力文字列の解析(ファイルから読み込む用)
  * ************************************************************************* */
 int parse_input(FILE *fp)
-{
+{ //FILE *fp
     char line[1024];
-
+    int new_s;
     if (fgets(line, 1024, fp) == NULL)
         return 0;
 
     subst(line, '\n', '\0');
     if (line[0] == '%')
     {
-        exec_command(line[1], &line[3]);
+        exec_command(new_s, line[1], &line[3]);
     }
     else
     {
+        // printf("hellow world\n");
         add_profile(&profile_data[nprofiles], line);
         nprofiles++;
     }
     return 1;
 }
 
+/* ************************************************************************* *
+ * 入力文字列の解析(ファイルから読み込む用)
+ * ************************************************************************* */
+int parse_input_from_stdin(int new_s, char command[BUF_SIZE])
+{ //FILE *fp
+    // char line[BUF_SIZE];
+    // line = command;
+    subst(command, '\n', '\0');
+    if (command[0] == '%')
+    {
+        exec_command(new_s, command[1], &command[3]);
+        printf("%c\n", command[1]);
+        printf("%s\n", &command[3]);
+    }
+    else
+    {
+        add_profile(&profile_data[nprofiles], &command[0]);
+        nprofiles++;
+        send_message(new_s, "register");
+    }
+    return 1;
+}
 /* ************************************************************************* *
  * メイン関数
  * ************************************************************************* */
@@ -461,49 +532,33 @@ int main(int argc, char *argv[])
             // return -1;
         }
 
-        //メッセージを受信する
-        int recv_byte = recv(new_s, buf, BUF_SIZE, 0);
-        if (recv_byte < 0)
+        while (1)
         {
-            printf("receive失敗\n");
-        }
-        else if (recv_byte == 0)
-        {
-            printf("接続先がシャットダウン\n");
-        }
-        else
-        {
-            printf("%s", buf);
-            printf("receive成功\n");
-        }
+            //メッセージを受信する
+            int recv_byte = recv(new_s, buf, BUF_SIZE, 0);
+            if (recv_byte < 0)
+            {
+                // printf("receive失敗\n");
+            }
+            else if (recv_byte == 0)
+            {
+                printf("接続先がシャットダウン\n");
+                break;
+            }
+            else
+            {
+                // printf("%s", buf);
+                printf("receive成功\n");
 
-        //応答メッセージを送信
-        memset(message, 0, BUF_SIZE);
-        sprintf(message, "%s", buf);
+                //応答メッセージを送信
+                memset(message, 0, BUF_SIZE);
+                sprintf(message, "%s", buf);
 
-        //大文字に変換
-        /* アルファベットの小文字を大文字に変換 */
-        for (int i = 0; i <= strlen(message); i++)
-        {
-            /* アルファベットの小文字なら変換 */
-            if (message[i] >= 97 && message[i] <= 122)
-                message[i] = message[i] - 32;
+                //コマンド処理
+                parse_input_from_stdin(new_s, message);
+                memset(message, 0, BUF_SIZE);
+            }
         }
-        parse_input(message);
-
-        //clientから送られてきた任意の文字数の長さ取得
-        // int len = strlen(message);
-        // snprintf(message, BUF_SIZE, "%d", len);
-        int send_byte = send(new_s, message, strlen(message), 0);
-        if (send_byte < 0)
-        {
-            printf("sendに失敗\n");
-        }
-        else
-        {
-            printf("sendに成功\n");
-        }
-        memset(message, 0, BUF_SIZE);
         close(new_s);
     }
 }

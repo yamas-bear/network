@@ -1,11 +1,34 @@
 #include <fcntl.h>
 #include <netdb.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #define BUF_SIZE 4096
+
+/* ************************************************************************* *
+ * 文字列strを区切り文字separatorで最大nitems個に分割して、分割した文字列の
+ * それぞれの先頭アドレスを配列retに代入する関数
+ * ************************************************************************* */
+int split(char *str, char *ret[], char separator, int nitems)
+{
+    int count = 0, n;
+
+    ret[count++] = str;
+
+    for (n = 0; str[n] != '\0' && count < nitems; n++)
+    {
+        if (str[n] == separator)
+        {
+            str[n] = '\0';
+            ret[count++] = str + n + 1;
+        }
+    }
+    return count;
+}
+
 int main(int argc, char *argv[])
 {
     struct hostent *hostent;
@@ -14,6 +37,8 @@ int main(int argc, char *argv[])
     int PORT_NO = 10570;
     char buf[BUF_SIZE];
     char message[BUF_SIZE];
+    char msg1[BUF_SIZE / 2];
+    char msg2[BUF_SIZE / 2];
     //通信相手のIPアドレスを取得
     hostent = gethostbyname(argv[1]);
     if (hostent == NULL)
@@ -42,50 +67,101 @@ int main(int argc, char *argv[])
 
     // //接続の設立
     // struct sockaddr_in sa;
-    if (connect(s, (struct sockaddr *)&sa, sizeof(struct sockaddr)) == 0)
-    {
-        printf("接続成功\n");
-    }
-    else
+    if (connect(s, (struct sockaddr *)&sa, sizeof(struct sockaddr)) != 0)
     {
         printf("接続失敗\n");
     }
-
-    // message = "GET /index.html";
-
-    // while (1)
-    // {
-    // //要求メッセージを送信
-    memset(message, 0, BUF_SIZE);
-    memset(buf, 0, BUF_SIZE);
-    sprintf(message, "%s", argv[2]);
-    // sprintf(message, "%s", std_in);
-    int send_byte = send(s, message, strlen(message), 0);
-    if (send_byte < 0)
-    {
-        printf("sendに失敗\n");
-    }
-    memset(message, 0, BUF_SIZE);
-
-    // //応答メッセージを受信
-    int recv_byte = recv(s, buf, BUF_SIZE, 0);
-    if (recv_byte < 0)
-    {
-        printf("receive失敗\n");
-    }
-    else if (recv_byte == 0)
-    {
-        printf("接続先がシャットダウン\n");
-    }
     else
     {
-        printf("-------------------------------------\n");
-        printf("%s\n", buf);
-        printf("-------------------------------------\n");
-
-        printf("receive成功\n");
+        printf("接続成功\n");
     }
-    // }
+    while (1)
+    {
+        while (1)
+        {
+            // //要求メッセージを送信
+            memset(message, 0, BUF_SIZE);
+            memset(buf, 0, BUF_SIZE);
+            memset(msg1, 0, BUF_SIZE);
+            memset(msg2, 0, BUF_SIZE);
+            read(0, msg1, BUF_SIZE - 2); //0が入力
+            sprintf(message, "%s\r\n", msg1);
+            printf("message:%s", message);
+            if (message != NULL)
+            {
+                break;
+            }
+        }
+        if (message != NULL)
+        {
+            int send_byte = send(s, message, strlen(message), 0);
+            if (send_byte < 0)
+            {
+                printf("sendに失敗\n");
+            }
+            memset(message, 0, BUF_SIZE);
+            // send_byte = send(s, message2, strlen(message2), 0);
+            // if (send_byte < 0)
+            // {
+            //     printf("send2に失敗\n");
+            // }
+            // memset(message2, 0, BUF_SIZE);
+            // //応答メッセージを受信
+            int recv_byte = recv(s, buf, BUF_SIZE, 0);
+            if (recv_byte < 0)
+            {
+                printf("receive失敗\n");
+            }
+            else if (recv_byte == 0)
+            {
+                printf("接続先がシャットダウン\n");
+            }
+            else
+            {
+                printf("-------------------------------------\n");
+                printf("%s\n", buf);
+                printf("-------------------------------------\n");
+                printf("receive成功\n");
+                char *command[2];
+                split(buf, command, ',', 2);
+                printf("[0]:%s\n", command[0]);
+                printf("[1]:%s\n", command[1]);
+
+                if (strcmp(command[0], "Q") == 0)
+                {
+                    exit(0);
+                }
+                else if (strcmp(command[0], "C") == 0)
+                {
+                    // printf("%d profile(s)\n", nprofiles);
+                    printf("%s profile(s)\n", command[1]);
+                }
+                else if (strcmp(command[0], "P") == 0)
+                {
+                    int n = atoi(command[1]);
+                    // int n = (int)*command[1];
+                    printf("number:%d\n", n);
+                    for (int i = 0; i < n; i++)
+                    {
+                        int recv_byte = recv(s, buf, BUF_SIZE, 0);
+                        char *data[5];
+                        split(buf, data, ',', 5);
+
+                        printf("Id    : %s\n", data[0]);
+                        printf("Name  : %s\n", data[1]);
+                        printf("Birth : %s\n", data[2]);
+                        printf("Addr  : %s\n", data[3]);
+                        printf("Com.  : %s\n", data[4]);
+                    }
+                }
+                else if (strcmp(command[0], "register") == 0)
+                {
+                    printf("データを登録できました\n");
+                }
+            }
+            // }
+        }
+    }
     // //応答メッセージを処理
     // //ソケットの削除
     close(s);
