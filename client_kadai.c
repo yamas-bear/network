@@ -77,6 +77,7 @@ int main(int argc, char *argv[])
     }
     while (1)
     {
+        printf("コマンドを入力してください\n");
         while (1)
         {
             // //要求メッセージを送信
@@ -100,12 +101,7 @@ int main(int argc, char *argv[])
                 printf("sendに失敗\n");
             }
             memset(message, 0, BUF_SIZE);
-            // send_byte = send(s, message2, strlen(message2), 0);
-            // if (send_byte < 0)
-            // {
-            //     printf("send2に失敗\n");
-            // }
-            // memset(message2, 0, BUF_SIZE);
+
             // //応答メッセージを受信
             int recv_byte = recv(s, buf, BUF_SIZE, 0);
             if (recv_byte < 0)
@@ -118,14 +114,14 @@ int main(int argc, char *argv[])
             }
             else
             {
-                printf("-------------------------------------\n");
-                printf("%s\n", buf);
-                printf("-------------------------------------\n");
+                // printf("-------------------------------------\n");
+                // printf("%s\n", buf);
+                // printf("-------------------------------------\n");
                 printf("receive成功\n");
                 char *command[2];
                 split(buf, command, ',', 2);
-                printf("[0]:%s\n", command[0]);
-                printf("[1]:%s\n", command[1]);
+                // printf("[0]:%s\n", command[0]);
+                // printf("[1]:%s\n", command[1]);
 
                 if (strcmp(command[0], "Q") == 0)
                 {
@@ -140,26 +136,62 @@ int main(int argc, char *argv[])
                 {
                     int n = atoi(command[1]);
                     // int n = (int)*command[1];
-                    printf("number:%d\n", n);
+                    // printf("number:%d\n", n);
                     for (int i = 0; i < n; i++)
                     {
                         int recv_byte = recv(s, buf, BUF_SIZE, 0);
                         char *data[5];
                         split(buf, data, ',', 5);
-
+                        printf("-----------------------------------------------------\n");
                         printf("Id    : %s\n", data[0]);
                         printf("Name  : %s\n", data[1]);
                         printf("Birth : %s\n", data[2]);
                         printf("Addr  : %s\n", data[3]);
                         printf("Com.  : %s\n", data[4]);
+                        printf("------------------------------------------------------\n");
                     }
+                }
+                else if (strcmp(command[0], "R") == 0)
+                {
+                    // printf("R以外の処理待ちです\n");
+                    printf("ファイルから読み込むことが出来ました。\n");
+                }
+                else if (strcmp(command[0], "W") == 0)
+                {
+                    printf("ファイルに書き込むことが出来ました\n");
+                }
+                else if (strcmp(command[0], "F") == 0)
+                {
+                    printf("検索結果を表示します\n");
+                    while (1)
+                    {
+                        memset(buf, 0, BUF_SIZE);
+                        int recv_byte = recv(s, buf, BUF_SIZE, 0);
+                        if (strcmp(buf, "end") == 0)
+                        {
+                            break;
+                        }
+                        char *data[5];
+                        printf("%s\n", buf);
+                        split(buf, data, ',', 5);
+                        printf("------------------------------------------------------\n");
+                        printf("Id    : %s\n", data[0]);
+                        printf("Name  : %s\n", data[1]);
+                        printf("Birth : %s\n", data[2]);
+                        printf("Addr  : %s\n", data[3]);
+                        printf("Com.  : %s\n", data[4]);
+                        printf("-------------------------------------------------------\n");
+                    }
+                }
+                else if (strcmp(command[0], "S") == 0)
+                {
+                    printf("ソートが完了しました。\n");
                 }
                 else if (strcmp(command[0], "register") == 0)
                 {
                     printf("データを登録できました\n");
                 }
             }
-            // }
         }
     }
     // //応答メッセージを処理

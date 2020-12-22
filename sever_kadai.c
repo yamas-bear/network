@@ -11,6 +11,7 @@
 #define max_connection 5
 #define PORT_NO 10570
 #define BUF_SIZE 4096
+#define MAX_LINE_LEN 1024
 
 int parse_input(FILE *fp);
 
@@ -93,7 +94,7 @@ add_profile(struct profile *p,
     p->birthday.y = atoi(birth[0]);
     p->birthday.m = atoi(birth[1]);
     p->birthday.d = atoi(birth[2]);
-
+    // sleep(0.5);
     return p;
 }
 /*クライアント側にメッセージを送信する*/
@@ -108,6 +109,17 @@ void send_message(int new_s, char message[BUF_SIZE])
     {
         printf("sendに成功\n");
     }
+}
+
+int get_line(FILE *fp, char *line)
+{
+    if (fgets(line, MAX_LINE_LEN + 1, fp) == NULL)
+    {
+        return 0;
+    }
+    subst(line, '\n', '\0');
+
+    return 1;
 }
 
 /* 終了コマンド(%Q) ******************************************************** */
@@ -174,7 +186,7 @@ void command_print(int new_s, struct profile *p,
     {
         char message[BUF_SIZE];
         memset(message, 0, BUF_SIZE);
-        int second = 1;
+        int second = 0.5;
         if (flag == 0)
         {
 
@@ -203,7 +215,7 @@ void command_print(int new_s, struct profile *p,
 }
 
 /* 読み込みコマンド(%R) **************************************************** */
-void command_read(struct profile *p,
+void command_read(int new_s, struct profile *p,
                   char *filename)
 {
     FILE *fp = fopen(filename, "r");
@@ -214,14 +226,21 @@ void command_read(struct profile *p,
     }
     else
     {
+        printf("Read開始\n");
+        sleep(3);
         while (parse_input(fp))
             ;
         fclose(fp);
+        printf("Read終了\n");
+        char message[BUF_SIZE];
+        memset(message, 0, BUF_SIZE);
+        sprintf(message, "%s", "R");
+        send_message(new_s, message);
     }
 }
 
 /* 書き出しコマンド(%W) **************************************************** */
-void command_write(struct profile *p,
+void command_write(int new_s, struct profile *p,
                    char *filename)
 {
     int n;
@@ -233,11 +252,17 @@ void command_write(struct profile *p,
     }
     else
     {
+        printf("Write開始\n");
         for (n = 0; n < nprofiles; n++)
         {
             print_profile_csv(fp, &p[n]);
         }
         fclose(fp);
+        printf("Write終了\n");
+        char message[BUF_SIZE];
+        memset(message, 0, BUF_SIZE);
+        sprintf(message, "%s", "W");
+        send_message(new_s, message);
     }
 }
 
@@ -260,11 +285,17 @@ void make_birth_string(struct date *birth,
 }
 
 /* 検索コマンド(%F) ******************************************************** */
-void command_find(struct profile *p,
+void command_find(int new_s, struct profile *p,
                   char *keyword)
 {
     char id[8], birth[11];
     int n;
+    char message[BUF_SIZE];
+
+    memset(message, 0, BUF_SIZE);
+    sprintf(message, "%s", "F");
+    send_message(new_s, message);
+    sleep(1);
 
     for (n = 0; n < nprofiles; n++)
     {
@@ -275,10 +306,27 @@ void command_find(struct profile *p,
             strcmp(p[n].name, keyword) == 0 ||
             strcmp(p[n].home, keyword) == 0)
         {
-            print_profile(&p[n]);
-            printf("\n");
+            printf("検索該当あり\n");
+            sleep(1);
+            char message[BUF_SIZE];
+            memset(message, 0, BUF_SIZE);
+            sprintf(message, "%d,%s,%04d-%02d-%02d,%s,%s",
+                    p[n].id,
+                    p[n].name,
+                    p[n].birthday.y,
+                    p[n].birthday.m,
+                    p[n].birthday.d,
+                    p[n].home,
+                    p[n].comment);
+            send_message(new_s, message);
         }
     }
+    sleep(1);
+    char final_message[BUF_SIZE];
+    memset(final_message, 0, BUF_SIZE);
+    sprintf(final_message, "%s", "end");
+    printf("検索終了:%s\n", final_message);
+    send_message(new_s, final_message);
 }
 
 /* ************************************************************************* *
@@ -379,10 +427,14 @@ int (*compare_function[])(struct profile *p1,
         sort_by_comment};
 
 /* 整列コマンド(%S) ******************************************************** */
-void command_sort(struct profile *p,
+void command_sort(int new_s, struct profile *p,
                   int column)
 {
     quick_sort(profile_data, 0, nprofiles - 1, compare_function[column - 1]);
+    char message[BUF_SIZE];
+    memset(message, 0, BUF_SIZE);
+    sprintf(message, "%s", "S");
+    send_message(new_s, message);
 }
 
 /* ************************************************************************* *
@@ -403,16 +455,16 @@ void exec_command(int new_s, char command,
         command_print(new_s, profile_data, atoi(parameter));
         break;
     case 'R':
-        command_read(profile_data, parameter);
+        command_read(new_s, profile_data, parameter);
         break;
     case 'W':
-        command_write(profile_data, parameter);
+        command_write(new_s, profile_data, parameter);
         break;
     case 'F':
-        command_find(profile_data, parameter);
+        command_find(new_s, profile_data, parameter);
         break;
     case 'S':
-        command_sort(profile_data, atoi(parameter));
+        command_sort(new_s, profile_data, atoi(parameter));
         break;
     default:
         printf("Invalid command '%c' was found.\n", command);
@@ -455,8 +507,6 @@ int parse_input_from_stdin(int new_s, char command[BUF_SIZE])
     if (command[0] == '%')
     {
         exec_command(new_s, command[1], &command[3]);
-        printf("%c\n", command[1]);
-        printf("%s\n", &command[3]);
     }
     else
     {
@@ -558,6 +608,8 @@ int main(int argc, char *argv[])
                 parse_input_from_stdin(new_s, message);
                 memset(message, 0, BUF_SIZE);
             }
+            sleep(1);
+            printf("finish!!\n");
         }
         close(new_s);
     }
