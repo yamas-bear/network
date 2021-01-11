@@ -1,0 +1,13 @@
+%Q 終了
+%C 登録内容のチェック
+%P n //先頭からn件表示
+%R file //fileからの読み出し
+%W file //fileへの読み出し
+%F word //検索結果を表示
+%S n //csvのn番目の項目で整列
+
+client
+./client localhost [command]
+
+sever
+./sever

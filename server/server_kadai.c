@@ -103,11 +103,11 @@ void send_message(int new_s, char message[BUF_SIZE])
     int send_byte = send(new_s, message, strlen(message), 0);
     if (send_byte < 0)
     {
-        printf("sendに失敗\n");
+        printf("応答メッセージの送信に失敗\n");
     }
     else
     {
-        printf("sendに成功\n");
+        printf("応答メッセージの送信に成功\n");
     }
 }
 
@@ -128,6 +128,7 @@ void command_quit(int new_s)
     char message[BUF_SIZE];
     memset(message, 0, BUF_SIZE);
     sprintf(message, "%s", "Q");
+    printf("クライアントとの接続を切断します\n");
     send_message(new_s, message);
     // exit(0);
 }
@@ -138,7 +139,7 @@ void command_check(int new_s)
     char message[BUF_SIZE];
     memset(message, 0, BUF_SIZE);
     sprintf(message, "%s,%d", "C", nprofiles);
-    printf("message:%s\n", message);
+    printf("登録されているデータは%s件\n", message);
     send_message(new_s, message);
 }
 
@@ -209,9 +210,8 @@ void command_print(int new_s, struct profile *p,
             send_message(new_s, message);
             sleep(second);
         }
-        // print_profile(&p[n]);
-        // printf("\n");
     }
+    printf("Print終了\n");
 }
 
 /* 読み込みコマンド(%R) **************************************************** */
@@ -223,6 +223,10 @@ void command_read(int new_s, struct profile *p,
     if (fp == NULL)
     {
         fprintf(stderr, "%%R: file open error %s.\n", filename);
+        char message[BUF_SIZE];
+        memset(message, 0, BUF_SIZE);
+        sprintf(message, "%s,%s", "R", "E");
+        send_message(new_s, message);
     }
     else
     {
@@ -244,11 +248,17 @@ void command_write(int new_s, struct profile *p,
                    char *filename)
 {
     int n;
-    FILE *fp = fopen(filename, "w");
+    char path[] = "../client/";
+    strcat(path, filename);
+    FILE *fp = fopen(path, "w");
 
     if (fp == NULL)
     {
         fprintf(stderr, "%%W: file write error %s.\n", filename);
+        char message[BUF_SIZE];
+        memset(message, 0, BUF_SIZE);
+        sprintf(message, "%s,%s", "W", "E");
+        send_message(new_s, message);
     }
     else
     {
@@ -291,6 +301,7 @@ void command_find(int new_s, struct profile *p,
     char id[8], birth[11];
     int n;
     char message[BUF_SIZE];
+    int hit_num = 0;
 
     memset(message, 0, BUF_SIZE);
     sprintf(message, "%s", "F");
@@ -307,6 +318,7 @@ void command_find(int new_s, struct profile *p,
             strcmp(p[n].home, keyword) == 0)
         {
             printf("検索該当あり\n");
+            hit_num++;
             sleep(1);
             char message[BUF_SIZE];
             memset(message, 0, BUF_SIZE);
@@ -324,8 +336,15 @@ void command_find(int new_s, struct profile *p,
     sleep(1);
     char final_message[BUF_SIZE];
     memset(final_message, 0, BUF_SIZE);
-    sprintf(final_message, "%s", "end");
-    printf("検索終了:%s\n", final_message);
+    if (hit_num)
+    {
+        sprintf(final_message, "%s", "end");
+    }
+    else
+    {
+        sprintf(final_message, "%s", "no_hit");
+    }
+    printf("検索終了\n");
     send_message(new_s, final_message);
 }
 
@@ -430,11 +449,21 @@ int (*compare_function[])(struct profile *p1,
 void command_sort(int new_s, struct profile *p,
                   int column)
 {
-    quick_sort(profile_data, 0, nprofiles - 1, compare_function[column - 1]);
-    char message[BUF_SIZE];
-    memset(message, 0, BUF_SIZE);
-    sprintf(message, "%s", "S");
-    send_message(new_s, message);
+    if (column > 0 && column < 6)
+    {
+        quick_sort(profile_data, 0, nprofiles - 1, compare_function[column - 1]);
+        char message[BUF_SIZE];
+        memset(message, 0, BUF_SIZE);
+        sprintf(message, "%s", "S");
+        send_message(new_s, message);
+    }
+    else
+    {
+        char message[BUF_SIZE];
+        memset(message, 0, BUF_SIZE);
+        sprintf(message, "%s,%s", "S", "E");
+        send_message(new_s, message);
+    }
 }
 
 /* ************************************************************************* *
@@ -468,6 +497,10 @@ void exec_command(int new_s, char command,
         break;
     default:
         printf("Invalid command '%c' was found.\n", command);
+        char message[BUF_SIZE];
+        memset(message, 0, BUF_SIZE);
+        sprintf(message, "%s", "Z");
+        send_message(new_s, message);
         break;
     }
 }
@@ -561,7 +594,7 @@ int main(int argc, char *argv[])
         if (check_listen < 0)
         {
             printf("接続要求を待っていません\n");
-            // return -1;
+            return -1;
         }
         else
         {
@@ -574,12 +607,11 @@ int main(int argc, char *argv[])
         if (new_s < 0)
         {
             printf("接続要求を受け付けませんでした\n");
-            // return -1;
+            return -1;
         }
         else
         {
             printf("接続要求を受けました\n");
-            // return -1;
         }
 
         while (1)
@@ -597,10 +629,7 @@ int main(int argc, char *argv[])
             }
             else
             {
-                // printf("%s", buf);
-                printf("receive成功\n");
-
-                //応答メッセージを送信
+                printf("要求メッセージの受信に成功\n");
                 memset(message, 0, BUF_SIZE);
                 sprintf(message, "%s", buf);
 
@@ -609,7 +638,8 @@ int main(int argc, char *argv[])
                 memset(message, 0, BUF_SIZE);
             }
             sleep(1);
-            printf("finish!!\n");
+            printf("処理終了\n");
+            printf("-------------------------------------------\n");
         }
         close(new_s);
     }

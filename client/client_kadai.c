@@ -51,6 +51,8 @@ int main(int argc, char *argv[])
     }
 
     //ソケットの作成
+    //AF_INET:IPv4 インターネットプロトコル
+    //SOCK_STREAM:TCP用のソケットを指定
     s = socket(AF_INET, SOCK_STREAM, 0);
     if (s == -1)
     {
@@ -66,7 +68,6 @@ int main(int argc, char *argv[])
     memcpy((char *)&sa.sin_addr, (char *)hostent->h_addr, hostent->h_length);
 
     // //接続の設立
-    // struct sockaddr_in sa;
     if (connect(s, (struct sockaddr *)&sa, sizeof(struct sockaddr)) != 0)
     {
         printf("接続失敗\n");
@@ -77,6 +78,7 @@ int main(int argc, char *argv[])
     }
     while (1)
     {
+        printf("\n");
         printf("コマンドを入力してください\n");
         while (1)
         {
@@ -87,7 +89,6 @@ int main(int argc, char *argv[])
             memset(msg2, 0, BUF_SIZE);
             read(0, msg1, BUF_SIZE - 2); //0が入力
             sprintf(message, "%s\r\n", msg1);
-            printf("message:%s", message);
             if (message != NULL)
             {
                 break;
@@ -98,15 +99,16 @@ int main(int argc, char *argv[])
             int send_byte = send(s, message, strlen(message), 0);
             if (send_byte < 0)
             {
-                printf("sendに失敗\n");
+                printf("要求メッセージの送信に失敗\n");
             }
+
             memset(message, 0, BUF_SIZE);
 
             // //応答メッセージを受信
             int recv_byte = recv(s, buf, BUF_SIZE, 0);
             if (recv_byte < 0)
             {
-                printf("receive失敗\n");
+                printf("応答メッセージの受信に失敗\n");
             }
             else if (recv_byte == 0)
             {
@@ -114,14 +116,9 @@ int main(int argc, char *argv[])
             }
             else
             {
-                // printf("-------------------------------------\n");
-                // printf("%s\n", buf);
-                // printf("-------------------------------------\n");
-                printf("receive成功\n");
+                // printf("応答メッセージの受信に成功\n");
                 char *command[2];
                 split(buf, command, ',', 2);
-                // printf("[0]:%s\n", command[0]);
-                // printf("[1]:%s\n", command[1]);
 
                 if (strcmp(command[0], "Q") == 0)
                 {
@@ -129,14 +126,11 @@ int main(int argc, char *argv[])
                 }
                 else if (strcmp(command[0], "C") == 0)
                 {
-                    // printf("%d profile(s)\n", nprofiles);
                     printf("%s profile(s)\n", command[1]);
                 }
                 else if (strcmp(command[0], "P") == 0)
                 {
                     int n = atoi(command[1]);
-                    // int n = (int)*command[1];
-                    // printf("number:%d\n", n);
                     for (int i = 0; i < n; i++)
                     {
                         int recv_byte = recv(s, buf, BUF_SIZE, 0);
@@ -153,12 +147,25 @@ int main(int argc, char *argv[])
                 }
                 else if (strcmp(command[0], "R") == 0)
                 {
-                    // printf("R以外の処理待ちです\n");
-                    printf("ファイルから読み込むことが出来ました。\n");
+                    if (strcmp(command[1], "E") == 0)
+                    {
+                        printf("DBにデータを準備することができませんでした。\nファイル名を確認してください\n");
+                    }
+                    else
+                    {
+                        printf("DBにデータを準備できました\n");
+                    }
                 }
                 else if (strcmp(command[0], "W") == 0)
                 {
-                    printf("ファイルに書き込むことが出来ました\n");
+                    if (strcmp(command[1], "E") == 0)
+                    {
+                        printf("指定されたファイルが存在しないため書き込めません\nデータが登録されているか，またファイルの名前が合っているかを確認してください\n");
+                    }
+                    else
+                    {
+                        printf("DBからデータを取得，ファイルへの書き込みを完了しました\n");
+                    }
                 }
                 else if (strcmp(command[0], "F") == 0)
                 {
@@ -171,8 +178,12 @@ int main(int argc, char *argv[])
                         {
                             break;
                         }
+                        else if (strcmp(buf, "no_hit") == 0)
+                        {
+                            printf("検索条件に当てはまるデータは存在しませんでした\n");
+                            break;
+                        }
                         char *data[5];
-                        printf("%s\n", buf);
                         split(buf, data, ',', 5);
                         printf("------------------------------------------------------\n");
                         printf("Id    : %s\n", data[0]);
@@ -185,11 +196,22 @@ int main(int argc, char *argv[])
                 }
                 else if (strcmp(command[0], "S") == 0)
                 {
-                    printf("ソートが完了しました。\n");
+                    if (strcmp(command[1], "E") == 0)
+                    {
+                        printf("カラム番号が存在しません\n1:ID\n2:氏名\n3:年月日\n4:住所\n5:備考\nで指定してくだだい\n");
+                    }
+                    else
+                    {
+                        printf("ソートが完了しました。\n");
+                    }
                 }
                 else if (strcmp(command[0], "register") == 0)
                 {
                     printf("データを登録できました\n");
+                }
+                else if (strcmp(command[0], "Z") == 0)
+                {
+                    printf("コマンドが存在しません\nコマンドを確認してください\n");
                 }
             }
         }
